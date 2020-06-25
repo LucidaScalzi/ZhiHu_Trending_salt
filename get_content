@@ -1,0 +1,36 @@
+import requests
+import re
+import json
+import jsonpath
+import os
+import csv
+import pandas as pd
+from retrying import retry
+from bs4 import BeautifulSoup
+from w3lib.html import remove_tags
+from collections import defaultdict
+
+cookie = 'cookie:  /you cookie/'
+headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/47.0.2526.80 Safari/537.36',
+          'Cookie':cookie}
+url = 'https://api.zhihu.com/market/rank_list?type=hottest&sku_type=salt_all&limit=1000&offset=0'
+
+r = requests.get(url, headers = headers)
+html = r.content.decode()
+bsobj = BeautifulSoup(html, 'html.parser')
+
+
+a = json.loads(html)
+
+title = jsonpath.jsonpath(a,"$..title")
+author = jsonpath.jsonpath(a,"$..author")
+media_type = jsonpath.jsonpath(a,"$..media_type")
+button_text = jsonpath.jsonpath(a,"$..button_text")
+
+data0 = {'名称':title, '作者':author, '类型':media_type, '价格':button_text}
+data1 = pd.DataFrame(data = data0)
+print(data1
+
+# 输出.xlsx
+outputpath='./fenci.xlsx'
+data1.to_excel(outputpath,index=False, header=True)
