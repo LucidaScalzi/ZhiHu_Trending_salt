@@ -1,0 +1,131 @@
+# 正儿八经开始爬取盐选专栏链接
+from lxml import etree
+import time
+import os
+import requests
+import re
+import json
+import jsonpath
+import csv
+from bs4 import BeautifulSoup
+
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from w3lib.html import remove_tags
+
+
+cookie = '/your cookie/'
+headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/47.0.2526.80 Safari/537.36',
+      'Cookie':cookie}
+
+urls = 'https://www.zhihu.com/xen/market/ranking-list/salt'
+
+# 使用selenium模拟人为访问页面,获取数据
+def spider_jd(url):
+    # ChromeOptions() 函数中有谷歌浏览器的一些配置
+    options = webdriver.ChromeOptions()
+    options.add_argument('headless')
+    driver = webdriver.Chrome()
+    
+
+    driver.get(url)
+    for i in range(0,10):
+        driver.execute_script("window.scrollTo(0,document.body.scrollHeight);")
+        time.sleep(2)
+    
+    source = driver.page_source
+    bsobj = BeautifulSoup(source, 'html.parser')
+    
+    a = bsobj.find('div', attrs={'class': 'App-wrap-rM9XT'})
+    
+    links= []
+    for k in a.find_all('a', attrs = {'class':'ProductCell-root-3LLcu RankingListItem-productCell-o4KL2'}):
+        link = k['href']
+        # 只保存书本（删除音频形势的盐选）
+        if link[:51] == 'https://www.zhihu.com/xen/market/remix/paid_column/':
+            links.append(link)
+    
+    driver.close()   # 爬取完毕关闭浏览器
+    
+    return links
+    
+    
+article_link = spider_jd(urls)
+
+
+chrome_options = Options()
+chrome_options.add_experimental_option("debuggerAddress", "127.0.0.1:9222")
+browser = webdriver.Chrome(chrome_driver, chrome_options=chrome_options)
+
+for i in range(len(article_link)):
+    url = article_link[i]
+
+    browser.get(url)
+    time.sleep(3)
+
+    source = browser.page_source
+    bsobj = BeautifulSoup(source, 'html.parser')
+
+    # 获得书名
+    a = bsobj.find('div', attrs={'class': 'AlbumColumnMagazineWebPage-title-wN4vV'})
+    book_title = remove_tags(str(a))
+    print(book_title)
+    
+    # 获得状态
+    a = bsobj.find('div', attrs={'class': 'SectionCount-root-8G3SV AlbumColumnMagazineWebPage-sectionCount-a2s6F'})
+    book_status = remove_tags(str(a))
+    print(book_status)
+
+    # 写出文件(空文件)
+    srcFile = '知乎/title.txt'
+    dstFile = '知乎/'+ '【' + book_status + '】' + book_title + '.txt'
+
+    with open('知乎/title.txt',"w",encoding='utf-8') as f:
+        f.write('【' + book_status + '】' + '《' + book_title + '》' + '\n')
+        f.write('\n')
+
+    os.rename(srcFile,dstFile)
+
+
+    # 获得目录
+    article_id = article_link[i].replace('https://www.zhihu.com/xen/market/remix/paid_column/', '')
+    content_js = 'https://api.zhihu.com/remix/well/' + article_id + '/catalog?'
+
+    r = requests.get(content_js, headers = headers)
+    html = r.content.decode()
+    a = json.loads(html)
+    chapter_link = jsonpath.jsonpath(a, "$..url")
+
+    # 获得章节的id
+    chapter_id = []
+    for i in range(len(chapter_link)):
+        chapter_id_temp = str(chapter_link[i]).replace('https://www.zhihu.com/market/manuscript?business_id=','').replace(article_id,'').replace('&track_id=', '').replace('&sku_type=paid_column','')
+        chapter_id.append(chapter_id_temp)
+    
+
+    for j in range(len(chapter_link)):
+        # 生成对应章节的url
+        url = 'https://www.zhihu.com/market/paid_column/' + article_id + '/section/' + chapter_id[j]
+        print(url)
+
+        browser.get(url)
+        time.sleep(2)
+
+        source = browser.page_source
+        bsobj = BeautifulSoup(source, 'html.parser')
+
+        # 获得章节题目
+        title = bsobj.find('h1', attrs={'class': 'ManuscriptTitle-root-vhZzG'})
+        title = remove_tags(str(title))
+
+        # 获得正文
+        a = bsobj.find('div', attrs={'class': 'ManuscriptIntro-root-ighpP'})
+        b = remove_tags(str(a))
+
+        with open(dstFile,"a",encoding='utf-8') as f:
+            f.write('第' + str(j+1) + '章·' + title + '\n')
+            f.write(' ' + '\n')
+            f.write(b + '\n')
+                
+        f.close()
+              
